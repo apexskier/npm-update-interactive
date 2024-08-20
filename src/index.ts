@@ -3,6 +3,8 @@ import path from "node:path";
 import * as semver from "semver";
 import checkbox from "./select";
 import colors from "yoctocolors-cjs";
+import { program } from "commander";
+import { ExitPromptError } from "@inquirer/core";
 
 interface Outdated {
   current: string;
@@ -11,6 +13,13 @@ interface Outdated {
   dependent: string;
   location: string;
 }
+
+program.option(
+  "--latest",
+  "install latest version of dependency, instead of version specified by semver",
+);
+program.parse();
+const options = program.opts<{ latest: boolean }>();
 
 async function getWorkspaceMap() {
   const workspaceMap = new Map<string, string>();
@@ -68,7 +77,11 @@ async function main() {
     });
   });
 
-  const latestOrWanted: "wanted" | "latest" = "latest";
+  let latestOrWanted: "wanted" | "latest" = "wanted";
+  if (options.latest) {
+    latestOrWanted = "latest";
+  }
+  console.log({ latestOrWanted });
 
   const filter = (info: Outdated) =>
     semver.neq(info.current, info[latestOrWanted]);
@@ -112,32 +125,49 @@ async function main() {
 
   const outdatedPackages = Object.keys(outdated);
   const answer = await checkbox({
-    message: "Update these packages",
+    message: "Select packages to update",
     pageSize: 20,
-    choices: outdatedPackages.map((pkg) => {
-      const p = outdated[pkg];
-      if (Array.isArray(p)) {
-        const allMatch =
-          p.every((a) => a[latestOrWanted] === p[0][latestOrWanted]) &&
-          p.every((a) => a.current === p[0].current);
-        let name = `${pkg} group`;
-        if (allMatch) {
-          name = makeChoice({
-            pkg,
-            ...p[0],
-            dependent: "*",
-          }).name;
+    choices: outdatedPackages
+      .filter((pkg) => {
+        const p = outdated[pkg];
+        if (Array.isArray(p)) {
+          return p.every((p) => p.current !== p[latestOrWanted]);
         }
-        return {
-          name,
-          expanded: !allMatch,
-          choices: p.filter(filter).map((info) => {
-            return makeChoice({ pkg, ...info });
-          }),
-        };
-      }
-      return makeChoice({ pkg, ...p });
-    }),
+        return p.current !== p[latestOrWanted];
+      })
+      .map((pkg) => {
+        const p = outdated[pkg];
+        if (Array.isArray(p)) {
+          const allTargetMatch = p.every(
+            (a) => a[latestOrWanted] === p[0][latestOrWanted],
+          );
+          const allCurrentMatch = p.every((a) => a.current === p[0].current);
+          const allMatch = allTargetMatch && allCurrentMatch;
+          let name = `*:${pkg}@${allCurrentMatch ? p[0].current : "various"} -> ${
+            allTargetMatch ? p[0][latestOrWanted] : "various"
+          }`;
+          if (allMatch) {
+            name = makeChoice({
+              pkg,
+              ...p[0],
+              dependent: "*",
+            }).name;
+          }
+          return {
+            name,
+            expanded: !allMatch,
+            choices: p.filter(filter).map((info) => {
+              return makeChoice({ pkg, ...info });
+            }),
+          };
+        }
+        return makeChoice({ pkg, ...p });
+      }),
+  }).catch((err) => {
+    if (err instanceof ExitPromptError) {
+      return [];
+    }
+    throw err;
   });
 
   const updates = new Map<

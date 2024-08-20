@@ -55,13 +55,13 @@ const checkboxTheme: CheckboxTheme = {
   helpMode: "auto",
 };
 
-function mapItemStatic<Value>(checked: boolean) {
-  return (item: Item<Value>): Item<Value> => {
+function mapItemStatic<Value, T extends Item<Value>>(checked: boolean) {
+  return (item: T): T => {
     if (isGroup(item)) {
       return {
         ...item,
         choices: item.choices.map(mapItemStatic(checked)),
-      } as Group<Value>;
+      };
     }
     if (isSelectable(item)) {
       return { ...item, checked };
@@ -136,25 +136,6 @@ function getChecked<Value>(item: Item<Value>): Array<Choice<Value>> {
   return item.checked ? [item] : [];
 }
 
-function toggle<Value>(item: Item<Value>): Item<Value> {
-  if (Separator.isSeparator(item)) {
-    return item;
-  }
-  if (isGroup(item)) {
-    return {
-      ...item,
-      choices: item.choices.map(toggle),
-    } as Group<Value>;
-  }
-  return { ...item, checked: !item.checked };
-}
-
-function check(checked: boolean) {
-  return function <Value>(item: Item<Value>): Item<Value> {
-    return isSelectable(item) ? { ...item, checked } : item;
-  };
-}
-
 function calcPrior<Value>(ptr: Item<Value>): Array<number> {
   if (isGroup(ptr) && ptr.expanded) {
     const idx = ptr.choices.length - 1;
@@ -206,6 +187,19 @@ function getActiveIndexForPagination<Value>(
   return count;
 }
 
+function toggle<Value, T extends Item<Value>>(item: T): T {
+  if (Separator.isSeparator(item)) {
+    return item;
+  }
+  if (isGroup(item)) {
+    return {
+      ...item,
+      choices: item.choices.map(toggle),
+    };
+  }
+  return { ...item, checked: !item.checked };
+}
+
 export default createPrompt(
   <Value>(config: Config<Value>, done: (value: Array<Value>) => void) => {
     const {
@@ -221,13 +215,7 @@ export default createPrompt(
     const firstRender = useRef(true);
     const [status, setStatus] = useState("pending");
     const [items, setItems] = useState<ReadonlyArray<Item<Value>>>(
-      choices.flatMap((choice) =>
-        Separator.isSeparator(choice)
-          ? { ...choice }
-          : isGroup(choice)
-            ? { ...choice }
-            : { ...choice },
-      ),
+      choices.flatMap((choice) => ({ ...choice })),
     );
 
     const bounds = useMemo(() => {
@@ -298,9 +286,8 @@ export default createPrompt(
             }
 
             // otherwise if parent is group and has more children, select next child
-            const parentSelectedItem = hierarchy[
-              hierarchy.length - 2
-            ] as Group<Value>;
+            const parentSelectedItem = hierarchy[hierarchy.length - 2];
+            assert(isGroup(parentSelectedItem));
             const nextChildIndex = active[active.length - 1] + 1;
             if (nextChildIndex < parentSelectedItem.choices.length) {
               return [...active.slice(0, -1), nextChildIndex];
@@ -339,18 +326,15 @@ export default createPrompt(
           items.map(
             (function mapItem(depth: number) {
               let activeIndex = active[depth];
-              return (
-                item: Separator | Choice<Value> | Group<Value>,
-                index: number,
-              ): Separator | Choice<Value> | Group<Value> => {
+              return <T extends Item<Value>>(item: T, index: number): T => {
                 if (index !== activeIndex || !isGroup(item)) {
                   return item;
                 }
                 return {
-                  ...(item as Group<Value>),
+                  ...item,
                   expanded: true,
                   choices: item.choices.map(mapItem(depth + 1)),
-                } as Group<Value>;
+                };
               };
             })(0),
           ),
@@ -360,20 +344,17 @@ export default createPrompt(
           items.map(
             (function mapItem(depth: number, isParentSelected: boolean) {
               let activeIndex = active[depth];
-              return (
-                item: Separator | Choice<Value> | Group<Value>,
-                index: number,
-              ): Separator | Choice<Value> | Group<Value> => {
+              return <T extends Item<Value>>(item: T, index: number): T => {
                 const currentInSelectionTree =
                   isParentSelected || activeIndex === index;
                 if (isGroup(item) && currentInSelectionTree) {
                   return {
-                    ...(item as Group<Value>),
+                    ...item,
                     expanded: false,
                     choices: item.choices.map(
                       mapItem(depth + 1, currentInSelectionTree),
                     ),
-                  } as Group<Value>;
+                  };
                 }
                 return item;
               };
@@ -391,27 +372,24 @@ export default createPrompt(
             (function mapItem(depth: number) {
               let activeIndex = active[depth];
               const finalIteration = depth === active.length - 1;
-              return (
-                item: Separator | Choice<Value> | Group<Value>,
-                index: number,
-              ): Separator | Choice<Value> | Group<Value> => {
+              return <T extends Item<Value>>(item: T, index: number): T => {
                 if (activeIndex === index) {
                   if (finalIteration) {
                     if (isGroup(item)) {
                       const checked = !allChecked(item);
                       return {
-                        ...(item as Group<Value>),
+                        ...item,
                         choices: item.choices.map(mapItemStatic(checked)),
-                      } as Group<Value>;
+                      };
                     } else if (isSelectable(item)) {
                       return { ...item, checked: !item.checked };
                     }
                   } else {
                     assert(isGroup(item));
                     return {
-                      ...(item as Group<Value>),
+                      ...item,
                       choices: item.choices.map(mapItem(depth + 1)),
-                    } as Group<Value>;
+                    };
                   }
                 }
                 return item;
@@ -420,10 +398,21 @@ export default createPrompt(
           ),
         );
       } else if (key.name === "a") {
-        const selectAll = items.some(
-          (choice) => isSelectable(choice) && !choice.checked,
+        const selectAll = !items.every(allChecked);
+        setItems(
+          items.map(function check<T extends Item<Value>>(item: T): T {
+            if (isGroup(item)) {
+              return {
+                ...item,
+                choices: item.choices.map(check),
+              };
+            }
+            if (isSelectable(item)) {
+              return { ...item, checked: selectAll };
+            }
+            return item;
+          }),
         );
-        setItems(items.map(check(selectAll)));
       } else if (key.name === "i") {
         setItems(items.map(toggle));
       } else if (isNumberKey(key)) {
@@ -433,67 +422,73 @@ export default createPrompt(
     const message = theme.style.message(config.message);
 
     const paginationIndex = getActiveIndexForPagination(active, items) - 1;
-    const page = usePagination<Item<Value> & { depth?: number }>({
-      items: items.flatMap(
-        (function mapItem(depth: number) {
-          return (item: Item<Value>): Item<Value> | Array<Item<Value>> => {
-            if (Separator.isSeparator(item)) {
+    const page = usePagination<Item<Value> & { depth?: number; last?: number }>(
+      {
+        items: items.flatMap(
+          (function mapItem(depth: number) {
+            return (item: Item<Value>): Item<Value> | Array<Item<Value>> => {
+              if (Separator.isSeparator(item)) {
+                return item;
+              }
+              if (isGroup(item)) {
+                return item.expanded
+                  ? [
+                      item,
+                      ...item.choices
+                        .flatMap(mapItem(depth + 1))
+                        .map((item, i, arr) => ({
+                          ...item,
+                          depth: depth + 1,
+                          last: i === arr.length - 1,
+                        })),
+                    ]
+                  : item;
+              }
               return item;
-            }
-            if (isGroup(item)) {
-              return item.expanded
-                ? [
-                    item,
-                    ...item.choices
-                      .flatMap(mapItem(depth + 1))
-                      .map((item) => ({ ...item, depth: depth + 1 })),
-                  ]
-                : item;
-            }
-            return item;
-          };
-        })(0),
-      ),
-      active: paginationIndex,
-      renderItem({ item, isActive }) {
-        if (Separator.isSeparator(item)) {
-          return ` ${item.separator}`;
-        }
-
-        let nestPrefix = "";
-        if (item.depth) {
-          nestPrefix =
-            Array(item.depth - 1)
-              .fill("|")
-              .join("") + "└";
-        }
-
-        const line = String(item.name || "TODO");
-        if (item.disabled) {
-          const disabledLabel =
-            typeof item.disabled === "string" ? item.disabled : "(disabled)";
-          return theme.style.disabledChoice(`${line} ${disabledLabel}`);
-        }
-
-        let checkbox: string;
-        if (isGroup(item)) {
-          if (item.choices.every(allChecked)) {
-            checkbox = theme.icon.checked;
-          } else if (item.choices.some(anyChecked)) {
-            checkbox = "⊘";
-          } else {
-            checkbox = theme.icon.unchecked;
+            };
+          })(0),
+        ),
+        active: paginationIndex,
+        renderItem({ item, isActive }) {
+          if (Separator.isSeparator(item)) {
+            return ` ${item.separator}`;
           }
-        } else {
-          checkbox = item.checked ? theme.icon.checked : theme.icon.unchecked;
-        }
-        const color = isActive ? theme.style.highlight : (x: string) => x;
-        const cursor = isActive ? theme.icon.cursor : " ";
-        return color(`${cursor}${nestPrefix}${checkbox} ${line}`);
+
+          let nestPrefix = "";
+          if (item.depth) {
+            nestPrefix =
+              Array(item.depth - 1)
+                .fill("|")
+                .join("") + (item.last ? "└─" : "├─");
+          }
+
+          const line = String(item.name || "TODO");
+          if (item.disabled) {
+            const disabledLabel =
+              typeof item.disabled === "string" ? item.disabled : "(disabled)";
+            return theme.style.disabledChoice(`${line} ${disabledLabel}`);
+          }
+
+          let checkbox: string;
+          if (isGroup(item)) {
+            if (item.choices.every(allChecked)) {
+              checkbox = theme.icon.checked;
+            } else if (item.choices.some(anyChecked)) {
+              checkbox = "⊘";
+            } else {
+              checkbox = theme.icon.unchecked;
+            }
+          } else {
+            checkbox = item.checked ? theme.icon.checked : theme.icon.unchecked;
+          }
+          const color = isActive ? theme.style.highlight : (x: string) => x;
+          const cursor = isActive ? theme.icon.cursor : " ";
+          return color(`${cursor}${nestPrefix}${checkbox} ${line}`);
+        },
+        pageSize,
+        loop,
       },
-      pageSize,
-      loop,
-    });
+    );
 
     if (status === "done") {
       const selection = items.flatMap(getChecked);
@@ -540,11 +535,6 @@ export default createPrompt(
     if (errorMsg) {
       error = `\n${theme.style.error(errorMsg)}`;
     }
-
-    helpTipTop = JSON.stringify({
-      active2: active,
-      paginationIndex,
-    });
 
     return `${prefix} ${message}${helpTipTop}\n${page}${helpTipBottom}${error}${ansiEscapes.cursorHide}`;
   },
