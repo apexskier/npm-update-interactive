@@ -225,7 +225,10 @@ async function main() {
           help: () => help(pkg),
         };
       }
-      const label = workspaceMap.get(p.dependent)?.packageName;
+      const label =
+        workspaceMap.size === 1
+          ? undefined
+          : workspaceMap.get(p.dependent)?.packageName;
       const value = { pkg, ...p };
       const name = makeChoiceName({ label, ...value });
       return { value, name, help: () => help(pkg) };
