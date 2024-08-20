@@ -49,6 +49,11 @@ async function getWorkspaceMap() {
 }
 
 async function main() {
+  // TODO: cli args
+  // * --latest  or wanted
+  // * change colorization? to match outdated?
+  // * -w?
+
   const workspaceMap = await getWorkspaceMap();
 
   const outdated = await new Promise<
@@ -151,11 +156,20 @@ async function main() {
 
   for (const [w, { root, deps }] of updates.entries()) {
     if (deps.length) {
-      console.log(
-        `npm install${root ? "" : ` -w ${workspaceMap.get(w)}`} ${deps
-          .map((dep) => `${dep.pkg}@${dep[latestOrWanted]}`)
-          .join(" ")}`,
-      );
+      await new Promise<void>((resolve, reject) => {
+        const cmd = `npm install${
+          root ? "" : ` -w ${workspaceMap.get(w)}`
+        } ${deps.map((dep) => `${dep.pkg}@${dep[latestOrWanted]}`).join(" ")}`;
+        console.log(cmd);
+        const p = exec(cmd, (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
+          }
+          resolve();
+        });
+        p.stdout?.pipe(process.stdout);
+        p.stderr?.pipe(process.stderr);
+      });
     }
   }
 }
