@@ -1,6 +1,6 @@
 {
   "name": "npm-update-interactive",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Upgrade your npm dependencies interactively.",
   "type": "module",
   "keywords": [
@@ -13,7 +13,8 @@
   "scripts": {
     "build": "tsc --build",
     "lint": "eslint . && prettier --check .",
-    "fix": "eslint --fix . && prettier --write ."
+    "fix": "eslint --fix . && prettier --write .",
+    "prepare": "npm run lint && npm run build"
   },
   "bin": {
     "npm-update-interactive": "dst/index.js"

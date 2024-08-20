@@ -1,0 +1,9 @@
+## Debugging
+
+Run from source without building using:
+
+```bash
+npx tsx --inspect "$PATH_TO_REPO/src/" [flags]
+```
+
+Then use VSCode's "Debug: Attach to Node Process" action to connect and start debugging.

@@ -17,14 +17,33 @@ interface Outdated {
 }
 
 program.option(
-  "--latest",
+  "-l, --latest",
   "install latest version of dependency, instead of version specified by semver",
 );
+program.option("-g, --global", "update globally installed packages");
+program.option("--save", "also update values in package.json");
+program.option("--dry-run", "output commands instead of executing them");
 program.parse();
-const options = program.opts<{ latest: boolean }>();
+const options = program.opts<{
+  latest?: true;
+  global?: true;
+  save?: true;
+  dryRun?: true;
+}>();
+console.log({ options });
 
-async function getWorkspaceMap() {
-  const workspaceMap = new Map<string, { path: string; packageName: string }>();
+async function getWorkspaceMap(): Promise<
+  | Map<string, { workspaceRoot: boolean; path: string; packageName: string }>
+  | Map<string, null>
+> {
+  if (options.global) {
+    return new Map([["global", null]]);
+  }
+
+  const workspaceMap = new Map<
+    string,
+    { workspaceRoot: boolean; path: string; packageName: string }
+  >();
   const cwd = process.cwd();
   const rootPackageName = await new Promise<string>((resolve, reject) => {
     exec("npm pkg get name", (error, stdout, stderr) => {
@@ -40,6 +59,7 @@ async function getWorkspaceMap() {
     });
   });
   workspaceMap.set(path.basename(cwd), {
+    workspaceRoot: true,
     path: cwd,
     packageName: rootPackageName,
   });
@@ -53,7 +73,7 @@ async function getWorkspaceMap() {
         }
 
         if (stderr) {
-          console.warn(`npm outdated stderr: ${stderr}`);
+          console.warn(`npm pkg get workspaces --json stderr: ${stderr}`);
         }
 
         resolve(JSON.parse(stdout));
@@ -81,7 +101,11 @@ async function getWorkspaceMap() {
           resolve(Object.keys(JSON.parse(stdout) as Record<string, string>)[0]);
         });
       });
-      workspaceMap.set(workspaceKey, { path: workspace, packageName });
+      workspaceMap.set(workspaceKey, {
+        workspaceRoot: false,
+        path: workspace,
+        packageName,
+      });
     }
   }
 
@@ -98,15 +122,18 @@ async function main() {
   const outdated = await new Promise<
     Record<string, Outdated | Array<Outdated>>
   >((resolve) => {
-    exec("npm outdated --json", (error, stdout, stderr) => {
-      // don't error check, since this is expected exit 1
+    exec(
+      `npm outdated --json${options.global ? " --global" : ""}`,
+      (_, stdout, stderr) => {
+        // don't error check, since this is expected exit 1
 
-      if (stderr) {
-        console.warn(`npm outdated stderr: ${stderr}`);
-      }
+        if (stderr) {
+          console.warn(`npm outdated stderr: ${stderr}`);
+        }
 
-      resolve(JSON.parse(stdout));
-    });
+        resolve(JSON.parse(stdout));
+      },
+    );
   });
 
   let latestOrWanted: "wanted" | "latest" = "wanted";
@@ -215,35 +242,42 @@ async function main() {
     throw err;
   });
 
-  const updates = new Map<
-    string,
-    { root: boolean; deps: Array<Outdated & { pkg: string }> }
-  >();
-  let root = true;
+  const updates = new Map<string, Array<Outdated & { pkg: string }>>();
   for (const key of workspaceMap.keys()) {
-    updates.set(key, { root, deps: [] });
-    root = false;
+    updates.set(key, []);
   }
 
   for (const info of answer) {
-    updates.get(info.dependent)?.deps.push(info);
+    updates.get(info.dependent)?.push(info);
   }
 
-  for (const [w, { root, deps }] of updates.entries()) {
+  for (const [w, deps] of updates.entries()) {
     if (deps.length) {
       await new Promise<void>((resolve, reject) => {
-        const cmd = `npm install${
-          root ? "" : ` -w ${workspaceMap.get(w)?.path}`
-        } ${deps.map((dep) => `${dep.pkg}@${dep[latestOrWanted]}`).join(" ")}`;
+        const workspacePkg = workspaceMap.get(w);
+        const destinationArg = !workspacePkg
+          ? " --global"
+          : workspacePkg.workspaceRoot
+            ? ""
+            : ` -w ${workspacePkg.path}`;
+        const dependenciesArgs = deps
+          .map((dep) => `${dep.pkg}@${dep[latestOrWanted]}`)
+          .join(" ");
+        const saveArg = options.save ? " --save" : "";
+        const cmd = `npm install${destinationArg}${saveArg} ${dependenciesArgs}`;
         console.log(cmd);
-        const p = exec(cmd, (error) => {
-          if (error) {
-            reject(error);
-          }
+        if (!options.dryRun) {
+          const p = exec(cmd, (error) => {
+            if (error) {
+              reject(error);
+            }
+            resolve();
+          });
+          p.stdout?.pipe(process.stdout);
+          p.stderr?.pipe(process.stderr);
+        } else {
           resolve();
-        });
-        p.stdout?.pipe(process.stdout);
-        p.stderr?.pipe(process.stderr);
+        }
       });
     }
   }
