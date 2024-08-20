@@ -15,3 +15,6 @@ This will launch the interactive interface where you can select which packages t
 `--latest`: This flag ignores the specified version ranges in `package.json` and instead use latest in the registry.
 
 Colors indicate safety of the update, `red` is a breaking change, `yellow` is a minor update, and `green` is patch.
+
+https://github.com/user-attachments/assets/1d3dea0c-1985-4bb3-9d54-e255aa5dad23
+
