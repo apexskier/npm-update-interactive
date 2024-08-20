@@ -33,7 +33,7 @@ const options = program.opts<{
 }>();
 
 async function getWorkspaceMap(): Promise<
-  | Map<string, { workspaceRoot: boolean; path: string; packageName: string }>
+  | Map<string, { workspacePath: false | string; packageName: string }>
   | Map<string, null>
 > {
   if (options.global) {
@@ -42,28 +42,24 @@ async function getWorkspaceMap(): Promise<
 
   const workspaceMap = new Map<
     string,
-    { workspaceRoot: boolean; path: string; packageName: string }
+    { workspacePath: false | string; packageName: string }
   >();
-  const cwd = process.cwd();
-  const rootPackageName = await new Promise<string>((resolve, reject) => {
-    exec("npm pkg get name", (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-      }
+  workspaceMap.set(path.basename(process.cwd()), {
+    workspacePath: false,
+    packageName: await new Promise((resolve, reject) => {
+      exec("npm pkg get name", (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+        }
 
-      if (stderr) {
-        console.warn(`npm pkg get name: ${stderr}`);
-      }
+        if (stderr) {
+          console.warn(`npm pkg get name: ${stderr}`);
+        }
 
-      resolve(JSON.parse(stdout) as string);
-    });
+        resolve(JSON.parse(stdout) as string);
+      });
+    }),
   });
-  workspaceMap.set(path.basename(cwd), {
-    workspaceRoot: true,
-    path: cwd,
-    packageName: rootPackageName,
-  });
-  path.basename(cwd);
 
   const workspaces = await new Promise<Array<string> | Record<string, object>>(
     (resolve, reject) => {
@@ -102,8 +98,7 @@ async function getWorkspaceMap(): Promise<
         });
       });
       workspaceMap.set(workspaceKey, {
-        workspaceRoot: false,
-        path: workspace,
+        workspacePath: workspace,
         packageName,
       });
     }
@@ -262,9 +257,9 @@ async function main() {
         const workspacePkg = workspaceMap.get(w);
         const destinationArg = !workspacePkg
           ? " --global"
-          : workspacePkg.workspaceRoot
-            ? ""
-            : ` -w ${workspacePkg.path}`;
+          : workspacePkg.workspacePath
+            ? ` -w ${workspacePkg.workspacePath}`
+            : "";
         const dependenciesArgs = deps
           .map((dep) => `${dep.pkg}@${dep[latestOrWanted]}`)
           .join(" ");
