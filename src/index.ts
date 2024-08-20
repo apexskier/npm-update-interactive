@@ -149,33 +149,27 @@ async function main() {
     const diff = semver.diff(info.current, info[latestOrWanted]);
     let color;
     switch (diff) {
-      case "major":
-        color = colors.redBright;
+      case "patch":
+        color = colors.greenBright;
         break;
       case "minor":
         color = colors.yellowBright;
         break;
-      case "patch":
-        color = colors.greenBright;
+      case "major":
+        color = colors.redBright;
         break;
       case "premajor":
-        color = colors.bgRed;
-        break;
       case "preminor":
-        color = colors.bgRed;
-        break;
       case "prepatch":
-        color = colors.bgRed;
-        break;
       case "prerelease":
         color = colors.bgRed;
         break;
       case null:
         throw new Error("unexpected");
     }
-    return `${info.label ? `${info.label}:` : ""}${info.pkg}@${
-      info.current
-    } -> ${color(`${info[latestOrWanted]}`)}`;
+    return `${info.label ? `${info.label}:` : ""}${info.pkg}@${color(
+      `${info.current} -> ${info[latestOrWanted]}`,
+    )}`;
   };
 
   const outdatedPackages = Object.keys(outdated);
