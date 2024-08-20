@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { exec } from "node:child_process";
 import path from "node:path";
 import * as semver from "semver";

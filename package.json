@@ -16,7 +16,7 @@
     "fix": "eslint --fix . && prettier --write ."
   },
   "bin": {
-    "npm-update-interactive": "./dst/index.js"
+    "npm-update-interactive": "dst/index.js"
   },
   "author": "Cameron Little <cameron@camlittle.com> (https://camlittle.com)",
   "license": "ISC",
