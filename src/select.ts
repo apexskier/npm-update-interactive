@@ -77,6 +77,7 @@ type Choice<Value> = {
   disabled?: boolean | string;
   checked?: boolean;
   type?: never;
+  help?: () => Promise<void>;
 };
 
 type Group<Value> = {
@@ -86,6 +87,7 @@ type Group<Value> = {
   disabled?: boolean | string;
   expanded?: boolean;
   type?: never;
+  help?: () => Promise<void>;
 };
 
 type Config<Value> = {
@@ -415,6 +417,14 @@ export default createPrompt(
         );
       } else if (key.name === "i") {
         setItems(items.map(toggle));
+      } else if ((key as unknown as { sequence: string }).sequence === "?") {
+        const item = active.slice(1).reduce((acc, cur) => {
+          assert(isGroup(acc));
+          return acc.choices[cur];
+        }, items[active[0]]);
+        if (!Separator.isSeparator(item)) {
+          item.help?.();
+        }
       } else if (isNumberKey(key)) {
         // unsupported
       }
@@ -513,6 +523,7 @@ export default createPrompt(
       } else {
         const keys = [
           `${theme.style.key("space")} to select`,
+          `${theme.style.key("?")} to open info`,
           `${theme.style.key("a")} to toggle all`,
           `${theme.style.key("i")} to invert selection`,
           `and ${theme.style.key("enter")} to proceed`,

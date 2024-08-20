@@ -7,6 +7,7 @@ import checkbox from "./select.js";
 import colors from "yoctocolors-cjs";
 import { program } from "commander";
 import { ExitPromptError } from "@inquirer/core";
+import open from "open";
 
 interface Outdated {
   current: string;
@@ -109,6 +110,10 @@ async function getWorkspaceMap(): Promise<
   }
 
   return workspaceMap;
+}
+
+async function help(pkg: string) {
+  return open(`https://npmjs.com/package/${pkg}`);
 }
 
 async function main() {
@@ -215,14 +220,19 @@ async function main() {
               const label = workspaceMap.get(info.dependent)?.packageName;
               const value = { pkg, ...info };
               const name = makeChoiceName({ label, ...value });
-              return { value, name };
+              return {
+                value,
+                name,
+                help: () => help(pkg),
+              };
             }),
+            help: () => help(pkg),
           };
         }
         const label = workspaceMap.get(p.dependent)?.packageName;
         const value = { pkg, ...p };
         const name = makeChoiceName({ label, ...value });
-        return { value, name };
+        return { value, name, help: () => help(pkg) };
       }),
   }).catch((err) => {
     if (err instanceof ExitPromptError) {

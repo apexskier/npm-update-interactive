@@ -41,6 +41,7 @@
   "dependencies": {
     "@inquirer/prompts": "^5.3.8",
     "commander": "^12.1.0",
+    "open": "^10.1.0",
     "semver": "^7.6.3"
   }
 }
