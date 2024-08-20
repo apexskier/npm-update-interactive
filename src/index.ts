@@ -177,63 +177,67 @@ async function main() {
     )}`;
   };
 
-  const outdatedPackages = Object.keys(outdated);
+  const choices = Object.keys(outdated)
+    .filter((pkg) => {
+      const p = outdated[pkg];
+      if (Array.isArray(p)) {
+        return p.every((p) => p.current !== p[latestOrWanted]);
+      }
+      return p.current !== p[latestOrWanted];
+    })
+    .map<
+      | { value: Outdated & { pkg: string }; name: string }
+      | {
+          name: string;
+          expanded: boolean;
+          choices: Array<{ value: Outdated & { pkg: string }; name: string }>;
+        }
+    >((pkg) => {
+      const p = outdated[pkg];
+      if (Array.isArray(p)) {
+        const allTargetMatch = p.every(
+          (a) => a[latestOrWanted] === p[0][latestOrWanted],
+        );
+        const allCurrentMatch = p.every((a) => a.current === p[0].current);
+        const allMatch = allTargetMatch && allCurrentMatch;
+        const groupName = allMatch
+          ? makeChoiceName({
+              label: "*",
+              pkg,
+              ...p[0],
+            })
+          : `*:${pkg}@${allCurrentMatch ? p[0].current : "various"} -> ${
+              allTargetMatch ? p[0][latestOrWanted] : "various"
+            }`;
+        return {
+          name: groupName,
+          expanded: !allMatch,
+          choices: p.filter(filter).map((info) => {
+            const label = workspaceMap.get(info.dependent)?.packageName;
+            const value = { pkg, ...info };
+            const name = makeChoiceName({ label, ...value });
+            return {
+              value,
+              name,
+              help: () => help(pkg),
+            };
+          }),
+          help: () => help(pkg),
+        };
+      }
+      const label = workspaceMap.get(p.dependent)?.packageName;
+      const value = { pkg, ...p };
+      const name = makeChoiceName({ label, ...value });
+      return { value, name, help: () => help(pkg) };
+    });
+  if (choices.length === 0) {
+    console.log("✨ All dependencies up-to-date");
+    return;
+  }
   const answer = await checkbox({
     message: "Select packages to update",
     pageSize: 20,
-    choices: outdatedPackages
-      .filter((pkg) => {
-        const p = outdated[pkg];
-        if (Array.isArray(p)) {
-          return p.every((p) => p.current !== p[latestOrWanted]);
-        }
-        return p.current !== p[latestOrWanted];
-      })
-      .map<
-        | { value: Outdated & { pkg: string }; name: string }
-        | {
-            name: string;
-            expanded: boolean;
-            choices: Array<{ value: Outdated & { pkg: string }; name: string }>;
-          }
-      >((pkg) => {
-        const p = outdated[pkg];
-        if (Array.isArray(p)) {
-          const allTargetMatch = p.every(
-            (a) => a[latestOrWanted] === p[0][latestOrWanted],
-          );
-          const allCurrentMatch = p.every((a) => a.current === p[0].current);
-          const allMatch = allTargetMatch && allCurrentMatch;
-          const groupName = allMatch
-            ? makeChoiceName({
-                label: "*",
-                pkg,
-                ...p[0],
-              })
-            : `*:${pkg}@${allCurrentMatch ? p[0].current : "various"} -> ${
-                allTargetMatch ? p[0][latestOrWanted] : "various"
-              }`;
-          return {
-            name: groupName,
-            expanded: !allMatch,
-            choices: p.filter(filter).map((info) => {
-              const label = workspaceMap.get(info.dependent)?.packageName;
-              const value = { pkg, ...info };
-              const name = makeChoiceName({ label, ...value });
-              return {
-                value,
-                name,
-                help: () => help(pkg),
-              };
-            }),
-            help: () => help(pkg),
-          };
-        }
-        const label = workspaceMap.get(p.dependent)?.packageName;
-        const value = { pkg, ...p };
-        const name = makeChoiceName({ label, ...value });
-        return { value, name, help: () => help(pkg) };
-      }),
+    choices,
   }).catch((err) => {
     if (err instanceof ExitPromptError) {
       return [];
@@ -245,7 +249,6 @@ async function main() {
   for (const key of workspaceMap.keys()) {
     updates.set(key, []);
   }
-
   for (const info of answer) {
     updates.get(info.dependent)?.push(info);
   }
