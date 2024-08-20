@@ -13,3 +13,5 @@ npx npm-update-interactive [--latest]
 This will launch the interactive interface where you can select which packages to update.
 
 `--latest`: This flag ignores the specified version ranges in `package.json` and instead use latest in the registry.
+
+Colors indicate safety of the update, `red` is a breaking change, `yellow` is a minor update, and `green` is patch.

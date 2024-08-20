@@ -30,7 +30,6 @@ const options = program.opts<{
   save?: true;
   dryRun?: true;
 }>();
-console.log({ options });
 
 async function getWorkspaceMap(): Promise<
   | Map<string, { workspaceRoot: boolean; path: string; packageName: string }>
@@ -113,10 +112,6 @@ async function getWorkspaceMap(): Promise<
 }
 
 async function main() {
-  // TODO: cli args
-  // * change colorization? to match outdated?
-  // * -w?
-
   const workspaceMap = await getWorkspaceMap();
 
   const outdated = await new Promise<
