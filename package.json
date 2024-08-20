@@ -1,15 +1,28 @@
 {
   "name": "npm-update-interactive",
-  "version": "1.0.0",
-  "description": "Interactive CLI updater of npm dependencies and workspaces.",
+  "version": "0.0.0",
+  "description": "Upgrade your npm dependencies interactively.",
   "type": "module",
-  "main": "dst/index.js",
+  "keywords": [
+    "npm",
+    "update",
+    "upgrade",
+    "dependencies"
+  ],
+  "repository": "github:apexskier/npm-update-interactive",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc --build",
+    "lint": "eslint . && prettier --check .",
+    "fix": "eslint --fix . && prettier --write ."
   },
-  "author": "",
+  "bin": {
+    "npm-update-interactive": "./dst/index.js"
+  },
+  "author": "Cameron Little <cameron@camlittle.com> (https://camlittle.com)",
   "license": "ISC",
   "devDependencies": {
+    "@eslint/compat": "^1.1.1",
+    "@eslint/js": "^9.9.0",
     "@types/node": "^22.4.0",
     "@types/semver": "^7.5.8",
     "@typescript-eslint/eslint-plugin": "^8.1.0",
@@ -18,8 +31,11 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-import-resolver-typescript": "^3.6.1",
     "eslint-plugin-import": "^2.29.1",
+    "globals": "^15.9.0",
+    "prettier": "^3.3.3",
     "tsx": "^4.17.0",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.2.0"
   },
   "dependencies": {
     "@inquirer/prompts": "^5.3.8",

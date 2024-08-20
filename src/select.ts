@@ -179,7 +179,7 @@ function getActiveIndexForPagination<Value>(
 ): number {
   let count = active.reduce((acc, cur) => acc + cur + 1, 0);
   for (let i = 0; i < active[0]; i++) {
-    let item = items[i];
+    const item = items[i];
     if (isGroup(item) && item.expanded) {
       count += countChoices(item);
     }
@@ -325,7 +325,7 @@ export default createPrompt(
         setItems(
           items.map(
             (function mapItem(depth: number) {
-              let activeIndex = active[depth];
+              const activeIndex = active[depth];
               return <T extends Item<Value>>(item: T, index: number): T => {
                 if (index !== activeIndex || !isGroup(item)) {
                   return item;
@@ -343,7 +343,7 @@ export default createPrompt(
         setItems(
           items.map(
             (function mapItem(depth: number, isParentSelected: boolean) {
-              let activeIndex = active[depth];
+              const activeIndex = active[depth];
               return <T extends Item<Value>>(item: T, index: number): T => {
                 const currentInSelectionTree =
                   isParentSelected || activeIndex === index;
@@ -370,7 +370,7 @@ export default createPrompt(
         setItems(
           items.map(
             (function mapItem(depth: number) {
-              let activeIndex = active[depth];
+              const activeIndex = active[depth];
               const finalIteration = depth === active.length - 1;
               return <T extends Item<Value>>(item: T, index: number): T => {
                 if (activeIndex === index) {
@@ -416,6 +416,7 @@ export default createPrompt(
       } else if (key.name === "i") {
         setItems(items.map(toggle));
       } else if (isNumberKey(key)) {
+        // unsupported
       }
     });
 

@@ -1,7 +1,7 @@
 import { exec } from "node:child_process";
 import path from "node:path";
 import * as semver from "semver";
-import checkbox from "./select";
+import checkbox from "./select.js";
 import colors from "yoctocolors-cjs";
 import { program } from "commander";
 import { ExitPromptError } from "@inquirer/core";
@@ -22,12 +22,28 @@ program.parse();
 const options = program.opts<{ latest: boolean }>();
 
 async function getWorkspaceMap() {
-  const workspaceMap = new Map<string, string>();
+  const workspaceMap = new Map<string, { path: string; packageName: string }>();
   const cwd = process.cwd();
-  workspaceMap.set(path.basename(cwd), cwd);
+  const rootPackageName = await new Promise<string>((resolve, reject) => {
+    exec("npm pkg get name", (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      }
+
+      if (stderr) {
+        console.warn(`npm pkg get name: ${stderr}`);
+      }
+
+      resolve(JSON.parse(stdout) as string);
+    });
+  });
+  workspaceMap.set(path.basename(cwd), {
+    path: cwd,
+    packageName: rootPackageName,
+  });
   path.basename(cwd);
 
-  const workspaces = await new Promise<Array<string> | Record<string, {}>>(
+  const workspaces = await new Promise<Array<string> | Record<string, object>>(
     (resolve, reject) => {
       exec("npm pkg get workspaces --json", (error, stdout, stderr) => {
         if (error) {
@@ -50,7 +66,20 @@ async function getWorkspaceMap() {
           "duplicate workspaces, see https://github.com/npm/cli/issues/7736",
         );
       }
-      workspaceMap.set(workspaceKey, workspace);
+      const packageName = await new Promise<string>((resolve, reject) => {
+        exec(`npm pkg get name -w ${workspace}`, (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
+          }
+
+          if (stderr) {
+            console.warn(`npm pkg get name -w ${workspace}: ${stderr}`);
+          }
+
+          resolve(Object.keys(JSON.parse(stdout) as Record<string, string>)[0]);
+        });
+      });
+      workspaceMap.set(workspaceKey, { path: workspace, packageName });
     }
   }
 
@@ -59,7 +88,6 @@ async function getWorkspaceMap() {
 
 async function main() {
   // TODO: cli args
-  // * --latest  or wanted
   // * change colorization? to match outdated?
   // * -w?
 
@@ -67,8 +95,10 @@ async function main() {
 
   const outdated = await new Promise<
     Record<string, Outdated | Array<Outdated>>
-  >((resolve, reject) => {
+  >((resolve) => {
     exec("npm outdated --json", (error, stdout, stderr) => {
+      // don't error check, since this is expected exit 1
+
       if (stderr) {
         console.warn(`npm outdated stderr: ${stderr}`);
       }
@@ -81,12 +111,17 @@ async function main() {
   if (options.latest) {
     latestOrWanted = "latest";
   }
-  console.log({ latestOrWanted });
 
   const filter = (info: Outdated) =>
     semver.neq(info.current, info[latestOrWanted]);
 
-  const makeChoice = (info: Outdated & { pkg: string }) => {
+  const makeChoiceName = (info: {
+    label?: string;
+    pkg: string;
+    current: string;
+    latest: string;
+    wanted: string;
+  }) => {
     const diff = semver.diff(info.current, info[latestOrWanted]);
     let color;
     switch (diff) {
@@ -112,15 +147,11 @@ async function main() {
         color = colors.bgRed;
         break;
       case null:
-        color = (str: string) => str;
-      // throw new Error("unexpected");
+        throw new Error("unexpected");
     }
-    return {
-      name: `${info.dependent}:${info.pkg}@${info.current} -> ${color(
-        `${info[latestOrWanted]}`,
-      )} (${diff})`,
-      value: info,
-    };
+    return `${info.label ? `${info.label}:` : ""}${info.pkg}@${
+      info.current
+    } -> ${color(`${info[latestOrWanted]}`)}`;
   };
 
   const outdatedPackages = Object.keys(outdated);
@@ -135,7 +166,14 @@ async function main() {
         }
         return p.current !== p[latestOrWanted];
       })
-      .map((pkg) => {
+      .map<
+        | { value: Outdated & { pkg: string }; name: string }
+        | {
+            name: string;
+            expanded: boolean;
+            choices: Array<{ value: Outdated & { pkg: string }; name: string }>;
+          }
+      >((pkg) => {
         const p = outdated[pkg];
         if (Array.isArray(p)) {
           const allTargetMatch = p.every(
@@ -143,25 +181,30 @@ async function main() {
           );
           const allCurrentMatch = p.every((a) => a.current === p[0].current);
           const allMatch = allTargetMatch && allCurrentMatch;
-          let name = `*:${pkg}@${allCurrentMatch ? p[0].current : "various"} -> ${
-            allTargetMatch ? p[0][latestOrWanted] : "various"
-          }`;
-          if (allMatch) {
-            name = makeChoice({
-              pkg,
-              ...p[0],
-              dependent: "*",
-            }).name;
-          }
+          const groupName = allMatch
+            ? makeChoiceName({
+                label: "*",
+                pkg,
+                ...p[0],
+              })
+            : `*:${pkg}@${allCurrentMatch ? p[0].current : "various"} -> ${
+                allTargetMatch ? p[0][latestOrWanted] : "various"
+              }`;
           return {
-            name,
+            name: groupName,
             expanded: !allMatch,
             choices: p.filter(filter).map((info) => {
-              return makeChoice({ pkg, ...info });
+              const label = workspaceMap.get(info.dependent)?.packageName;
+              const value = { pkg, ...info };
+              const name = makeChoiceName({ label, ...value });
+              return { value, name };
             }),
           };
         }
-        return makeChoice({ pkg, ...p });
+        const label = workspaceMap.get(p.dependent)?.packageName;
+        const value = { pkg, ...p };
+        const name = makeChoiceName({ label, ...value });
+        return { value, name };
       }),
   }).catch((err) => {
     if (err instanceof ExitPromptError) {
@@ -188,10 +231,10 @@ async function main() {
     if (deps.length) {
       await new Promise<void>((resolve, reject) => {
         const cmd = `npm install${
-          root ? "" : ` -w ${workspaceMap.get(w)}`
+          root ? "" : ` -w ${workspaceMap.get(w)?.path}`
         } ${deps.map((dep) => `${dep.pkg}@${dep[latestOrWanted]}`).join(" ")}`;
         console.log(cmd);
-        const p = exec(cmd, (error, stdout, stderr) => {
+        const p = exec(cmd, (error) => {
           if (error) {
             reject(error);
           }
