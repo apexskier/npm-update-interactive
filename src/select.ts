@@ -282,6 +282,26 @@ export default createPrompt(
               return [...active, 0];
             }
 
+            const [, last] = active.reduce<
+              [ReadonlyArray<Item<Value>>, boolean]
+            >(
+              ([items, last], cur) => {
+                const item = items[cur];
+                return [
+                  isGroup(item) ? item.choices : [],
+                  last && cur === items.length - 1,
+                ];
+              },
+              [items, true],
+            );
+            if (last) {
+              if (loop) {
+                return [0];
+              } else {
+                return active;
+              }
+            }
+
             // if no parents, just select next item
             if (active.length === 1) {
               return [active[0] + 1];
@@ -302,9 +322,17 @@ export default createPrompt(
       } else if (isUpKey(key)) {
         setActive(
           (() => {
-            // wrap around
+            // at first item
             if (active.length === 1 && active[0] === 0) {
-              return [bounds.last];
+              if (loop) {
+                return [
+                  bounds.last,
+                  ...(isGroup(items[bounds.last])
+                    ? calcPrior(items[bounds.last])
+                    : []),
+                ];
+              }
+              return active;
             }
 
             // if tail is 0, drop tail
@@ -312,15 +340,18 @@ export default createPrompt(
               return active.slice(0, -1);
             }
 
-            // otherwise subtract one from tail
+            // otherwise subtract one from tail, then
             // if tail is a group and expanded, select last child (recursively)
-            const n = [...active.slice(0, -1), active[active.length - 1] - 1];
-            let ptr = items[n[0]] as Group<Value>;
-            for (let i = 1; i < n.length; i++) {
-              ptr = ptr.choices[n[i]] as unknown as Group<Value>;
+            const remaining = [
+              ...active.slice(0, -1),
+              active[active.length - 1] - 1,
+            ];
+            let ptr = items[remaining[0]] as Group<Value>;
+            for (let i = 1; i < remaining.length; i++) {
+              ptr = ptr.choices[remaining[i]] as unknown as Group<Value>;
             }
 
-            return [...n, ...calcPrior(ptr)];
+            return [...remaining, ...calcPrior(ptr)];
           })(),
         );
       } else if (isRightKey(key)) {
