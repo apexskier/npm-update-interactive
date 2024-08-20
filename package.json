@@ -1,6 +1,6 @@
 {
   "name": "npm-update-interactive",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Upgrade your npm dependencies interactively.",
   "type": "module",
   "keywords": [
