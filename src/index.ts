@@ -236,6 +236,7 @@ async function main() {
     message: "Select packages to update",
     pageSize: 20,
     choices,
+    loop: false,
   }).catch((err) => {
     if (err instanceof ExitPromptError) {
       return [];
