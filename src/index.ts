@@ -147,7 +147,7 @@ async function main() {
     wanted: string;
   }) => {
     const diff = semver.diff(info.current, info[latestOrWanted]);
-    let color;
+    let color: (text: string) => string;
     switch (diff) {
       case "patch":
         color = colors.greenBright;
@@ -158,6 +158,9 @@ async function main() {
       case "major":
         color = colors.redBright;
         break;
+      case "release":
+        color = colors.gray;
+        break;
       case "premajor":
       case "preminor":
       case "prepatch":
@@ -165,7 +168,7 @@ async function main() {
         color = colors.bgRed;
         break;
       case null:
-        throw new Error("unexpected");
+        throw new Error(`unexpected semver diff: ${diff}`);
     }
     return `${info.label ? `${info.label}:` : ""}${info.pkg}@${color(
       `${info.current} -> ${info[latestOrWanted]}`,

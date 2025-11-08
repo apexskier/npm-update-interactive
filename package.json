@@ -46,6 +46,7 @@
     "ansi-escapes": "^7.2.0",
     "commander": "^12.1.0",
     "open": "^10.2.0",
-    "semver": "^7.6.3"
+    "semver": "^7.6.3",
+    "yoctocolors-cjs": "^2.1.3"
   }
 }
