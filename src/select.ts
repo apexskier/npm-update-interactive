@@ -461,7 +461,7 @@ export default createPrompt(
       }
     });
 
-    const message = theme.style.message(config.message);
+    const message = theme.style.message(config.message, "idle");
 
     const paginationIndex = getActiveIndexForPagination(active, items) - 1;
     const page = usePagination<Item<Value> & { depth?: number; last?: number }>(
