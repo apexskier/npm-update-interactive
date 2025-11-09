@@ -25,6 +25,7 @@ type CheckboxTheme = {
   icon: {
     checked: string;
     unchecked: string;
+    partialChecked: string;
     cursor: string;
   };
   style: {
@@ -41,6 +42,7 @@ const checkboxTheme: CheckboxTheme = {
   icon: {
     checked: colors.green(figures.circleFilled),
     unchecked: figures.circle,
+    partialChecked: colors.yellow("⊘"),
     cursor: figures.pointer,
   },
   style: {
@@ -531,7 +533,7 @@ export default createPrompt(
             if (item.choices.every(allChecked)) {
               checkbox = theme.icon.checked;
             } else if (item.choices.some(anyChecked)) {
-              checkbox = "⊘";
+              checkbox = theme.icon.partialChecked;
             } else {
               checkbox = theme.icon.unchecked;
             }

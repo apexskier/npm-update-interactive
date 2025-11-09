@@ -32,8 +32,34 @@ const options = program.opts<{
   dryRun?: true;
 }>();
 
+function longestCommonPrefix(strings: ReadonlyArray<string>): string {
+  if (strings.length === 0) return "";
+
+  // Sort the array lexicographically
+  strings = strings.toSorted();
+
+  // Take the first and last string after sorting
+  const first = strings[0];
+  const last = strings[strings.length - 1];
+
+  let i = 0;
+  // Compare characters until they differ
+  while (i < first.length && first[i] === last[i]) {
+    i++;
+  }
+
+  return first.slice(0, i);
+}
+
 async function getWorkspaceMap(): Promise<
-  | Map<string, { workspacePath: false | string; packageName: string }>
+  | Map<
+      string,
+      {
+        workspacePath: false | string;
+        packageName: string;
+        packageNameShort: string;
+      }
+    >
   | Map<string, null>
 > {
   if (options.global) {
@@ -42,23 +68,29 @@ async function getWorkspaceMap(): Promise<
 
   const workspaceMap = new Map<
     string,
-    { workspacePath: false | string; packageName: string }
+    {
+      workspacePath: false | string;
+      packageName: string;
+      packageNameShort: string;
+    }
   >();
+  const packageName = await new Promise<string>((resolve, reject) => {
+    exec("npm pkg get name", (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      }
+
+      if (stderr) {
+        console.warn(`npm pkg get name: ${stderr}`);
+      }
+
+      resolve(JSON.parse(stdout) as string);
+    });
+  });
   workspaceMap.set(path.basename(process.cwd()), {
     workspacePath: false,
-    packageName: await new Promise((resolve, reject) => {
-      exec("npm pkg get name", (error, stdout, stderr) => {
-        if (error) {
-          reject(error);
-        }
-
-        if (stderr) {
-          console.warn(`npm pkg get name: ${stderr}`);
-        }
-
-        resolve(JSON.parse(stdout) as string);
-      });
-    }),
+    packageName,
+    packageNameShort: packageName,
   });
 
   const workspaces = await new Promise<Array<string> | Record<string, object>>(
@@ -100,8 +132,19 @@ async function getWorkspaceMap(): Promise<
       workspaceMap.set(workspaceKey, {
         workspacePath: workspace,
         packageName,
+        packageNameShort: packageName,
       });
     }
+  }
+
+  const prefix = longestCommonPrefix(
+    Array.from(workspaceMap.values()).map(({ packageName }) => packageName),
+  );
+  for (const [key, value] of workspaceMap.entries()) {
+    workspaceMap.set(key, {
+      ...value,
+      packageNameShort: value.packageName.slice(prefix.length),
+    });
   }
 
   return workspaceMap;
@@ -211,7 +254,7 @@ async function main() {
           name: groupName,
           expanded: !allMatch,
           choices: p.filter(filter).map((info) => {
-            const label = workspaceMap.get(info.dependent)?.packageName;
+            const label = workspaceMap.get(info.dependent)?.packageNameShort;
             const value = { pkg, ...info };
             const name = makeChoiceName({ label, ...value });
             return {
@@ -226,7 +269,7 @@ async function main() {
       const label =
         workspaceMap.size === 1
           ? undefined
-          : workspaceMap.get(p.dependent)?.packageName;
+          : workspaceMap.get(p.dependent)?.packageNameShort;
       const value = { pkg, ...p };
       const name = makeChoiceName({ label, ...value });
       return { value, name, help: () => help(pkg) };
