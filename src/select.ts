@@ -8,8 +8,6 @@ import {
   useRef,
   useMemo,
   makeTheme,
-  isUpKey,
-  isDownKey,
   isSpaceKey,
   isNumberKey,
   isEnterKey,
@@ -151,6 +149,22 @@ function isGroup<Value>(
 ): x is Group<Value> {
   return (x as Group<Value>).choices !== undefined;
 }
+
+const isUpKey = (key: KeypressEvent): boolean =>
+  // The left key
+  key.name === "up" ||
+  // Vim keybinding
+  key.name === "k" ||
+  // Emacs keybinding
+  (key.ctrl && key.name === "p");
+
+const isDownKey = (key: KeypressEvent): boolean =>
+  // The right key
+  key.name === "down" ||
+  // Vim keybinding
+  key.name === "j" ||
+  // Emacs keybinding
+  (key.ctrl && key.name === "n");
 
 const isLeftKey = (key: KeypressEvent): boolean =>
   // The left key
