@@ -1,6 +1,6 @@
 import {
   createPrompt,
-  KeypressEvent,
+  type KeypressEvent,
   useState,
   useKeypress,
   usePrefix,
@@ -8,8 +8,6 @@ import {
   useRef,
   useMemo,
   makeTheme,
-  isUpKey,
-  isDownKey,
   isSpaceKey,
   isNumberKey,
   isEnterKey,
@@ -27,6 +25,7 @@ type CheckboxTheme = {
   icon: {
     checked: string;
     unchecked: string;
+    partialChecked: string;
     cursor: string;
   };
   style: {
@@ -43,6 +42,7 @@ const checkboxTheme: CheckboxTheme = {
   icon: {
     checked: colors.green(figures.circleFilled),
     unchecked: figures.circle,
+    partialChecked: colors.yellow("⊘"),
     cursor: figures.pointer,
   },
   style: {
@@ -152,6 +152,22 @@ function isGroup<Value>(
   return (x as Group<Value>).choices !== undefined;
 }
 
+const isUpKey = (key: KeypressEvent): boolean =>
+  // The left key
+  key.name === "up" ||
+  // Vim keybinding
+  key.name === "k" ||
+  // Emacs keybinding
+  (key.ctrl && key.name === "p");
+
+const isDownKey = (key: KeypressEvent): boolean =>
+  // The right key
+  key.name === "down" ||
+  // Vim keybinding
+  key.name === "j" ||
+  // Emacs keybinding
+  (key.ctrl && key.name === "n");
+
 const isLeftKey = (key: KeypressEvent): boolean =>
   // The left key
   key.name === "left" ||
@@ -239,7 +255,8 @@ export default createPrompt(
     // this a list of indices, each index is the active choice at that level
     const [active, setActive] = useState<Array<number>>([bounds.first]);
 
-    useKeypress(async (key) => {
+    useKeypress(async (_key) => {
+      const key = _key as KeypressEvent & { shift?: boolean };
       if (isEnterKey(key)) {
         const selection = items.flatMap(getChecked);
         const isValid = await validate([...selection]);
@@ -360,7 +377,7 @@ export default createPrompt(
             (function mapItem(depth: number) {
               const activeIndex = active[depth];
               return <T extends Item<Value>>(item: T, index: number): T => {
-                if (index !== activeIndex || !isGroup(item)) {
+                if ((!key.shift && index !== activeIndex) || !isGroup(item)) {
                   return item;
                 }
                 return {
@@ -380,7 +397,7 @@ export default createPrompt(
               return <T extends Item<Value>>(item: T, index: number): T => {
                 const currentInSelectionTree =
                   isParentSelected || activeIndex === index;
-                if (isGroup(item) && currentInSelectionTree) {
+                if (isGroup(item) && (currentInSelectionTree || key.shift)) {
                   return {
                     ...item,
                     expanded: false,
@@ -516,7 +533,7 @@ export default createPrompt(
             if (item.choices.every(allChecked)) {
               checkbox = theme.icon.checked;
             } else if (item.choices.some(anyChecked)) {
-              checkbox = "⊘";
+              checkbox = theme.icon.partialChecked;
             } else {
               checkbox = theme.icon.unchecked;
             }
@@ -554,6 +571,8 @@ export default createPrompt(
       } else {
         const keys = [
           `${theme.style.key("space")} to select`,
+          `${theme.style.key("►")} to open group`,
+          `${theme.style.key("◄")} to close group`,
           `${theme.style.key("?")} to open info`,
           `${theme.style.key("a")} to toggle all`,
           `${theme.style.key("i")} to invert selection`,
