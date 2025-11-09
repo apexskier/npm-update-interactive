@@ -1,6 +1,6 @@
 import {
   createPrompt,
-  KeypressEvent,
+  type KeypressEvent,
   useState,
   useKeypress,
   usePrefix,

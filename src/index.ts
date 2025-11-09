@@ -235,6 +235,7 @@ async function main() {
     console.log("✨ All dependencies up-to-date");
     return;
   }
+
   const answer = await checkbox({
     message: "Select packages to update",
     pageSize: 20,
